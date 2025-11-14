@@ -1,0 +1,12 @@
+awscrt
+awsiotsdk
+boto3
+botocore
+jmespath
+load-dotenv
+psycopg2-binary
+python-dateutil
+python-dotenv
+s3transfer
+six
+urllib3

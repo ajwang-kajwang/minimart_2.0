@@ -1,0 +1,5 @@
+names:
+  0: person
+path: /content/custom_dataset
+train: images/train
+val: images/val
