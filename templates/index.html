@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Minimart Tracking System</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; margin: 20px; background: #f0f2f5; color: #1a1a1a; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; padding: 20px; background: white; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+        .video-box { background: black; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        #videoFeed { width: 100%; display: block; }
+        .stats-panel { background: white; padding: 20px; border-radius: 12px; height: fit-content; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .metric-card { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #667eea; }
+        .metric-val { font-size: 24px; font-weight: bold; margin: 5px 0; }
+        .person-item { padding: 10px; border-bottom: 1px solid #eee; font-size: 0.9em; }
+        .coord-tag { background: #e3f2fd; color: #1565c0; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Minimart SOA Tracker</h1>
+            <p>Refactored Architecture: SOLID Principles Edition</p>
+        </div>
+        
+        <div class="grid">
+            <div class="video-box">
+                <img id="videoFeed" src="/video_feed" alt="Live Stream">
+            </div>
+            
+            <div class="stats-panel">
+                <h3>Live Metrics</h3>
+                <div class="metric-card">
+                    <div>Active Shoppers</div>
+                    <div class="metric-val" id="activeCount">0</div>
+                </div>
+                <div class="metric-card" style="border-left-color: #48bb78;">
+                    <div>System FPS</div>
+                    <div class="metric-val" id="fpsVal">0.0</div>
+                </div>
+                
+                <h3>Tracked Entities</h3>
+                <div id="peopleList"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const activeCount = document.getElementById('activeCount');
+        const fpsVal = document.getElementById('fpsVal');
+        const peopleList = document.getElementById('peopleList');
+
+        socket.on('coordinate_tracking_update', function(data) {
+            activeCount.textContent = data.active_count;
+            fpsVal.textContent = data.fps.toFixed(1);
+            
+            peopleList.innerHTML = '';
+            data.people.forEach(p => {
+                if(!p.active) return;
+                const div = document.createElement('div');
+                div.className = 'person-item';
+                div.innerHTML = `
+                    <strong>ID ${p.id}</strong> 
+                    <span style="float:right" class="coord-tag">
+                        ${p.real_world ? `(${p.real_world.x.toFixed(1)}, ${p.real_world.y.toFixed(1)})` : 'Calculating...'}
+                    </span>
+                `;
+                peopleList.appendChild(div);
+            });
+        });
+    </script>
+</body>
+</html>
