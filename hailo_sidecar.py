@@ -12,7 +12,7 @@ app = Flask(__name__)
 # Initialize the detector once on startup
 print("🚀 Loading Hailo Detector on Host...")
 # Ensure we point to the correct model path on the host
-model_path = "models/crowdhuman.hef"
+model_path = "/home/icp/minimart_2.0/models/crowdhuman.hef"
 
 if not os.path.exists(model_path):
     print(f"❌ Error: Model not found at {model_path}")
