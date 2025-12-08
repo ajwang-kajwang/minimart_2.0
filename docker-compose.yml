@@ -2,20 +2,16 @@ services:
   minimart-tracker:
     build: .
     container_name: minimart_rpi_sim
-    ports:
-      - "5000:5000"
+    # Lets container talk to the stream on localhost:8888
+    network_mode: host 
     volumes:
-      # Mount source code for live editing (hot reload)
       - .:/app
-      # Mount models directory to persist heavy weights
       - ./models:/app/models
+      # Map shared memory for OpenCV performance
+      - /dev/shm:/dev/shm
     environment:
       - FLASK_ENV=development
-      # Force fallback to OpenCV if Picamera/Hailo are missing
-      - SIMULATION_MODE=true
-    devices:
-      # Pass through host webcam for the CameraService fallback
-      # Linux: /dev/video0
-      # Mac/Windows: Remove this 'devices' section and use IP stream or file input
-      - /dev/video0:/dev/video0
+      # Point to local stream
+      - CAMERA_STREAM_URL=tcp://127.0.0.1:8888
+
     restart: unless-stopped

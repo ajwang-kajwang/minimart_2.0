@@ -35,16 +35,13 @@ ENV HAILO_EXAMPLES_PATH=/usr/share/hailo-examples
 RUN mkdir -p /usr/share/hailo-models && \
     mkdir -p /usr/share/hailo-examples
 
-# --- PYTHON DEPENDENCIES ---
-# Copy requirements first to leverage Docker cache
+# Copy requirements 
 COPY requirements.txt .
 
-# Install dependencies
-# Note: 'picamera2' and 'hailo-platform' are often platform-specific.
-# We attempt to install them, but handle failures gracefully in the app code.
+# Install dependencies 
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt || echo "Warning: Some specific RPi/Hailo packages failed to install via pip. Relying on application fallback."
-
+    pip install --no-cache-dir -r requirements.txt
+    
 # Copy the entire application
 COPY . .
 
