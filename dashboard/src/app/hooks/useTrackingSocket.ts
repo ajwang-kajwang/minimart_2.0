@@ -48,6 +48,9 @@ export function useTrackingSocket(options: UseTrackingSocketOptions = {}) {
   } = options;
 
   const socketRef = useRef<Socket | null>(null);
+  // Add a state to trigger re-renders when socket is ready
+  const [socketInstance, setSocketInstance] = useState<Socket | null>(null);
+
   const [connectionState, setConnectionState] = useState<ConnectionState>({
     connected: false,
     error: null,
@@ -118,12 +121,14 @@ export function useTrackingSocket(options: UseTrackingSocketOptions = {}) {
     });
 
     socketRef.current = socket;
+    setSocketInstance(socket);
   }, [url, reconnectAttempts, reconnectDelay]);
 
   const disconnect = useCallback(() => {
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
+      setSocketInstance(null); // Ensure state is cleared
     }
   }, []);
 
@@ -143,6 +148,9 @@ export function useTrackingSocket(options: UseTrackingSocketOptions = {}) {
     connect,
     disconnect,
     connectionState,
+    
+    // EXPOSED SOCKET OBJECT (Essential for Chatbot)
+    socket: socketInstance, 
     
     // Data
     trackingData,

@@ -1,6 +1,6 @@
 import { Brain, Sparkles, MessageSquare, Send, Loader2 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
-import { useTrackingSocket, TrackedPerson } from "../hooks";
+import { useTrackingSocket } from "../hooks";
 
 interface AnalysisEntry {
   id: number;
@@ -15,7 +15,8 @@ interface BedrockAnalysisProps {
 }
 
 export function BedrockAnalysis({ backendUrl = "http://localhost:5000" }: BedrockAnalysisProps) {
-  const { trackingData, activePeople, isConnected } = useTrackingSocket({ url: backendUrl });
+  // 1. Destructure socket from the hook (ensure hook is updated to return this)
+  const { trackingData, activePeople, isConnected, socket } = useTrackingSocket({ url: backendUrl });
   
   const [entries, setEntries] = useState<AnalysisEntry[]>([]);
   const [inputMessage, setInputMessage] = useState("");
@@ -33,7 +34,27 @@ export function BedrockAnalysis({ backendUrl = "http://localhost:5000" }: Bedroc
     }
   }, [entries]);
 
-  // Generate automatic insights based on tracking data
+  // 2. Listen for Real AI Responses from Flask
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleBedrockResponse = (data: { answer: string }) => {
+      addEntry({
+        message: data.answer,
+        type: "success",
+        source: "ai"
+      });
+      setIsProcessing(false);
+    };
+
+    socket.on("bedrock_response", handleBedrockResponse);
+
+    return () => {
+      socket.off("bedrock_response", handleBedrockResponse);
+    };
+  }, [socket]);
+
+  // Generate automatic insights based on tracking data (Client-side logic)
   useEffect(() => {
     const now = Date.now();
     const timeSinceLastInsight = now - lastInsightTime.current;
@@ -42,12 +63,6 @@ export function BedrockAnalysis({ backendUrl = "http://localhost:5000" }: Bedroc
     if (timeSinceLastInsight < 5000) return;
     
     const currentCount = activePeople.length;
-    const timestamp = new Date().toLocaleTimeString('en-US', { 
-      hour12: false, 
-      hour: '2-digit', 
-      minute: '2-digit', 
-      second: '2-digit' 
-    });
 
     // Detect significant changes
     if (currentCount !== prevActiveCount.current) {
@@ -98,13 +113,13 @@ export function BedrockAnalysis({ backendUrl = "http://localhost:5000" }: Bedroc
     }]);
   };
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = () => {
     if (!inputMessage.trim() || isProcessing) return;
     
     const userMessage = inputMessage.trim();
     setInputMessage("");
     
-    // Add user message
+    // Add user message to UI immediately
     addEntry({
       message: userMessage,
       type: "info",
@@ -113,17 +128,26 @@ export function BedrockAnalysis({ backendUrl = "http://localhost:5000" }: Bedroc
     
     setIsProcessing(true);
     
-    // TODO: Replace with actual Bedrock/LLM API call
-    // For now, simulate a response based on current tracking data
-    setTimeout(() => {
-      const response = generateMockResponse(userMessage, activePeople, trackingData.fps);
-      addEntry({
-        message: response,
-        type: "success",
-        source: "ai"
+    // 3. Send Request to Python Backend via Socket.IO
+    if (socket && isConnected) {
+      socket.emit("ask_bedrock", { 
+        question: userMessage,
+        context: {
+            active_people: activePeople.length,
+            fps: trackingData.fps
+        }
       });
-      setIsProcessing(false);
-    }, 1000);
+    } else {
+      // Fallback if disconnected
+      setTimeout(() => {
+          addEntry({
+              message: "Error: Connection to backend lost.",
+              type: "warning",
+              source: "system"
+          });
+          setIsProcessing(false);
+      }, 500);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -226,12 +250,12 @@ export function BedrockAnalysis({ backendUrl = "http://localhost:5000" }: Bedroc
               onKeyPress={handleKeyPress}
               placeholder="Ask about traffic patterns, generate reports..."
               className="w-full bg-zinc-800 border border-zinc-700 rounded-lg pl-10 pr-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/25"
-              disabled={isProcessing}
+              disabled={isProcessing || !isConnected}
             />
           </div>
           <button
             onClick={handleSendMessage}
-            disabled={!inputMessage.trim() || isProcessing}
+            disabled={!inputMessage.trim() || isProcessing || !isConnected}
             className="p-2.5 bg-purple-500 hover:bg-purple-600 disabled:bg-zinc-700 disabled:cursor-not-allowed rounded-lg transition-colors"
           >
             {isProcessing ? (
@@ -243,48 +267,13 @@ export function BedrockAnalysis({ backendUrl = "http://localhost:5000" }: Bedroc
         </div>
         
         <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
-          <span>AI Model: Claude (Coming Soon)</span>
+          <span>AI Model: Claude 3.5 Sonnet</span>
           <div className="flex items-center gap-1">
-            <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-pulse"></div>
-            <span className="text-purple-400">Ready for Bedrock Integration</span>
+            <div className={`w-1.5 h-1.5 bg-purple-400 rounded-full ${isConnected ? 'animate-pulse' : ''}`}></div>
+            <span className="text-purple-400">{isConnected ? 'Bedrock Connected' : 'Waiting for connection...'}</span>
           </div>
         </div>
       </div>
     </div>
   );
-}
-
-// Mock response generator - will be replaced with actual LLM
-function generateMockResponse(query: string, people: TrackedPerson[], fps: number): string {
-  const lowerQuery = query.toLowerCase();
-  
-  if (lowerQuery.includes("how many") || lowerQuery.includes("count")) {
-    return `Currently tracking ${people.length} ${people.length === 1 ? 'person' : 'people'} in the store. System running at ${fps.toFixed(1)} FPS.`;
-  }
-  
-  if (lowerQuery.includes("report") || lowerQuery.includes("summary")) {
-    return `Quick Summary: ${people.length} active customers detected. Average tracking confidence: ${people.length > 0 ? (people.reduce((acc, p) => acc + p.confidence, 0) / people.length * 100).toFixed(0) : 0}%. Vision system operating normally at ${fps.toFixed(1)} FPS.`;
-  }
-  
-  if (lowerQuery.includes("location") || lowerQuery.includes("where")) {
-    if (people.length === 0) {
-      return "No customers currently detected in the monitored area.";
-    }
-    const locations = people.map(p => {
-      if (p.real_world) {
-        return `ID ${p.id}: (${p.real_world.x.toFixed(1)}, ${p.real_world.y.toFixed(1)})`;
-      }
-      return `ID ${p.id}: position being calculated`;
-    }).join(", ");
-    return `Current customer positions: ${locations}`;
-  }
-  
-  if (lowerQuery.includes("busy") || lowerQuery.includes("traffic")) {
-    const assessment = people.length === 0 ? "very quiet" : 
-                       people.length < 3 ? "light traffic" :
-                       people.length < 6 ? "moderate traffic" : "busy";
-    return `Store traffic is currently ${assessment} with ${people.length} customers in view.`;
-  }
-  
-  return `I understand you're asking about "${query}". This feature will be fully powered by AWS Bedrock soon. Currently tracking ${people.length} people at ${fps.toFixed(1)} FPS.`;
 }
