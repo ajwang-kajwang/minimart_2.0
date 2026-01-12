@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import time
 import os
-from typing import Tuple, Optional # <--- Fixed import
+from typing import Tuple, Optional
 
 from domain.interfaces import ICameraSource
 
@@ -16,8 +16,8 @@ class CameraService(ICameraSource):
     def _initialize_hardware(self):
         print(f"📷 Connecting to Camera Stream at: {self.stream_url}")
         
-        # Retry logic (container might start before the stream is ready)
-        for i in range(5):
+        # INCREASED RETRY: 30 attempts * 2 seconds = 60 seconds wait time
+        for i in range(30):  # <--- CHANGED FROM 5 TO 30
             try:
                 self.camera = cv2.VideoCapture(self.stream_url)
                 if self.camera.isOpened():

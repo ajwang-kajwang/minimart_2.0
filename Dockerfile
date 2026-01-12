@@ -9,7 +9,6 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Install System Dependencies
-# We include libraries for OpenCV, compilation tools, and multimedia
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
@@ -26,8 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # --- HAILO SIMULATION SETUP ---
-# Note: Actual HailoRT requires the physical device and drivers mounted.
-# We set up the environment variables expected by the Hailo SDK.
+# Environment variables for Hailo SDK
 ENV HAILO_MODEL_ZOO_PATH=/usr/share/hailo-models
 ENV HAILO_EXAMPLES_PATH=/usr/share/hailo-examples
 
@@ -37,7 +35,6 @@ RUN mkdir -p /usr/share/hailo-models && \
 
 # Copy requirements 
 COPY requirements.txt .
-
 # Install dependencies 
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
@@ -48,7 +45,7 @@ COPY . .
 # Expose the Flask port
 EXPOSE 5000
 
-# Create a non-root user for security (optional but recommended)
+# Create a non-root user for security
 RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
 

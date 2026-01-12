@@ -25,8 +25,8 @@ sudo systemctl start hailo-sidecar
 echo "⏳ Waiting 5 seconds for hardware to warm up..."
 sleep 5
 
-# 5. Launch the Main Application (Docker)
+# 5. Launch the Main Application
 echo "🐳 Launching Application..."
 docker compose up
 
-# (When you press Ctrl+C in Docker, the script continues to the 'trap' function above)
+
