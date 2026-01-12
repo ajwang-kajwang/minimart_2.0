@@ -11,7 +11,7 @@ import time
 from typing import List, Dict, Optional, Tuple
 
 class CrowdHumanHailoDetector:
-    def __init__(self, hef_path: str = "models/yolo_v8_crowdhuman--640x640_quant_hailort_multidevice_1/yolo_v8_crowdhuman--640x640_quant_hailort_multidevice_1.hef"):
+    def __init__(self, hef_path: str = "models/yolo_v8_crowdhuman--640x640_quant_hailort_multidevice_1.hef"):
         """
         Initialize CrowdHuman HAILO8L detector
         

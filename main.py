@@ -11,10 +11,10 @@ import numpy as np
 from flask import Flask, Response, jsonify
 from flask_socketio import SocketIO
 
-# Import Domain Interfaces (The Contracts)
+# Import Domain Interfaces 
 from domain.interfaces import ICameraSource, IDetector, ITracker
 
-# Import Concrete Services (The Implementations)
+# Import Concrete Services 
 from infrastructure.camera import CameraService
 from services.detection import DetectionService
 from services.tracking import TrackingService
