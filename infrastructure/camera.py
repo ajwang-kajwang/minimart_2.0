@@ -9,15 +9,14 @@ from domain.interfaces import ICameraSource
 class CameraService(ICameraSource):
     def __init__(self):
         self.camera = None
-        # Allow configuring the URL via Docker env vars
+        
         self.stream_url = os.environ.get('CAMERA_STREAM_URL', 'tcp://127.0.0.1:8888')
         self._initialize_hardware()
 
     def _initialize_hardware(self):
         print(f"📷 Connecting to Camera Stream at: {self.stream_url}")
         
-        # INCREASED RETRY: 30 attempts * 2 seconds = 60 seconds wait time
-        for i in range(30):  # <--- CHANGED FROM 5 TO 30
+        for i in range(30):  
             try:
                 self.camera = cv2.VideoCapture(self.stream_url)
                 if self.camera.isOpened():

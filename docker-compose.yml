@@ -1,17 +1,4 @@
-services:
-  # 1. The Broadcaster (New Service)
-  rpi-stream:
-    image: python:3.11-slim-bookworm # Using a base image to run the shell command
-    container_name: minimart_streamer
-    privileged: true
-    network_mode: host
-    command: /bin/bash -c "apt-get update && apt-get install -y rpicam-apps && rpicam-vid -t 0 --inline --listen -o tcp://0.0.0.0:8888 --width 640 --height 640 --framerate 30"
-    restart: unless-stopped
-    devices:
-      - /dev/video0:/dev/video0
-      - /dev/dma_heap:/dev/dma_heap
-
-  # 2. The Consumer (Your existing service)
+services: 
   minimart-tracker:
     build: .
     container_name: minimart_rpi_sim
@@ -23,6 +10,5 @@ services:
     environment:
       - FLASK_ENV=development
       - CAMERA_STREAM_URL=tcp://127.0.0.1:8888
-    depends_on:
-      - rpi-stream
+      - USE_REMOTE_DETECTOR=true 
     restart: unless-stopped

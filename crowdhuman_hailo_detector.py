@@ -129,9 +129,17 @@ class CrowdHumanHailoDetector:
 
 _detector_instance = None
 def get_hailo_detector(model_name: str = None, cv2_ref_passed=None, np_ref_passed=None) -> Optional[CrowdHumanHailoDetector]:
+    """Get or create singleton CrowdHuman detector"""
     global _detector_instance
+    
     if _detector_instance is None:
-        _detector_instance = CrowdHumanHailoDetector()
+        
+        if model_name:
+            _detector_instance = CrowdHumanHailoDetector(hef_path=model_name)
+        else:
+            _detector_instance = CrowdHumanHailoDetector()
+            
         if not _detector_instance.device:
             _detector_instance = None
+    
     return _detector_instance
