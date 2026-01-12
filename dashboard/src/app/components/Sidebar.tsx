@@ -48,7 +48,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
       <div className="p-4 border-t border-zinc-800">
         <div className="text-xs text-zinc-500">
           <p>System Version</p>
-          <p className="text-zinc-400 mt-1">v2.0.4-beta</p>
+          <p className="text-zinc-400 mt-1">v2.0.0 - WebSocket Bridge</p>
         </div>
       </div>
     </div>
