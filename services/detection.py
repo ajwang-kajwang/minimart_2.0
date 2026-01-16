@@ -1,11 +1,10 @@
 import cv2
 import numpy as np
 import os
-import requests # Requires 'requests' in requirements.txt
+import requests 
 from ultralytics import YOLO
 from domain.interfaces import IDetector
 
-# Import legacy dependency (only works if running natively)
 try:
     from crowdhuman_hailo_detector import get_hailo_detector
     HAS_ENHANCED_DETECTOR = True
@@ -55,7 +54,7 @@ class RemoteHailoDetector(IDetector):
             return []
 
 class DetectionService(IDetector):
-    def __init__(self, confidence_threshold: float = 0.4):
+    def __init__(self, confidence_threshold: float = 0.15):
         self.detector = None
         self.model = None
         self.confidence_threshold = confidence_threshold
@@ -63,14 +62,12 @@ class DetectionService(IDetector):
         self._initialize_model()
 
     def _initialize_model(self):
-        # 0. Check for Remote Sidecar Mode (New!)
         if os.environ.get('USE_REMOTE_DETECTOR', 'false').lower() == 'true':
             print("🚀 Initializing Remote Hailo Client...")
             self.detector = RemoteHailoDetector(url="http://127.0.0.1:6000/detect")
             self.use_enhanced = True
             return
 
-        # 1. Try Local Enhanced Hailo Detector (Native only)
         if HAS_ENHANCED_DETECTOR:
             print("🚀 Initializing Local Hailo Detector...")
             self.detector = get_hailo_detector(

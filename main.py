@@ -23,7 +23,7 @@ from services.geometry import GeometryService
 # --- Main Application Orchestrator ---
 class MinimartTrackerApp:
     def __init__(self, camera: ICameraSource, detector: IDetector, tracker: ITracker, geometry: GeometryService):
-        # Dependencies injected via constructor (DIP compliant)
+    
         self.camera = camera
         self.detector = detector
         self.tracker = tracker

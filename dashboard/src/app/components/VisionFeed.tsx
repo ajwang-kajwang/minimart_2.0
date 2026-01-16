@@ -1,156 +1,131 @@
-import { Video, Maximize2, Wifi, WifiOff } from "lucide-react";
-import { useState, useEffect } from "react";
-import { useTrackingSocket, TrackedPerson } from "../hooks";
+import { Video, Maximize2, Activity } from "lucide-react";
+import { useEffect, useState } from "react";
+import { socket } from "../services/socket"; // Import shared socket
 
-interface VisionFeedProps {
-  backendUrl?: string;
+interface BoundingBox {
+  id: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label: string;
+  confidence: number;
 }
 
-export function VisionFeed({ backendUrl = "http://localhost:5000" }: VisionFeedProps) {
-  const { trackingData, connectionState, isConnected, activePeople } = useTrackingSocket({
-    url: backendUrl,
-  });
+export function VisionFeed() {
+  const [boxes, setBoxes] = useState<BoundingBox[]>([]);
+  const [fps, setFps] = useState(0);
+  const [activeCount, setActiveCount] = useState(0);
+  const [isConnected, setIsConnected] = useState(false);
 
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [imageError, setImageError] = useState(false);
+  // Dynamic Video URL: Points to Flask on port 5000 regardless of where React is running
+  const videoUrl = `http://${window.location.hostname}:5000/video_feed`;
 
-  // Reset image error when connection changes
   useEffect(() => {
-    if (isConnected) {
-      setImageError(false);
+    function onConnect() {
+      setIsConnected(true);
     }
-  }, [isConnected]);
 
-  const videoFeedUrl = `${backendUrl}/video_feed`;
-
-  const handleImageError = () => {
-    setImageError(true);
-  };
-
-  const handleImageLoad = () => {
-    setImageError(false);
-  };
-
-  const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen);
-  };
-
-  // Generate bounding box color from track color
-  const getBoxColor = (person: TrackedPerson) => {
-    if (person.color) {
-      return `rgb(${person.color[0]}, ${person.color[1]}, ${person.color[2]})`;
+    function onDisconnect() {
+      setIsConnected(false);
     }
-    return "#22d3ee"; // Default cyan
-  };
+
+    function onTrackingUpdate(data: any) {
+      setFps(data.fps);
+      setActiveCount(data.active_count);
+
+      // Map Python backend data to React state
+      // Backend sends: { id, x, y, width, height, confidence, ... } (pixels)
+      // Frontend expects % for responsive overlay
+      const mappedBoxes = data.people.map((p: any) => ({
+        id: p.id,
+        // Assuming 640x640 input resolution from Hailo/Camera. 
+        // Adjust 640 if your camera resolution differs.
+        x: (p.x / 640) * 100, 
+        y: (p.y / 640) * 100,
+        width: (p.width / 640) * 100,
+        height: (p.height / 640) * 100,
+        label: "Person",
+        confidence: p.confidence
+      }));
+      setBoxes(mappedBoxes);
+    }
+
+    // Attach listeners
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("coordinate_tracking_update", onTrackingUpdate);
+
+    // Cleanup listeners on unmount
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("coordinate_tracking_update", onTrackingUpdate);
+    };
+  }, []);
 
   return (
-    <div className={`bg-zinc-900 border border-zinc-800 rounded-lg p-5 h-full flex flex-col ${isFullscreen ? 'fixed inset-4 z-50' : ''}`}>
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 h-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Video className="w-5 h-5 text-cyan-400" />
           <h2 className="text-white font-semibold">Live Computer Vision Feed</h2>
+          {isConnected ? (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-500/10 rounded-full border border-emerald-500/20">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] font-medium text-emerald-500">LIVE</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-red-500/10 rounded-full border border-red-500/20">
+              <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+              <span className="text-[10px] font-medium text-red-500">OFFLINE</span>
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-2">
-          {/* Connection Status */}
-          <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs ${
-            isConnected 
-              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-              : 'bg-red-500/10 text-red-400 border border-red-500/20'
-          }`}>
-            {isConnected ? (
-              <>
-                <Wifi className="w-3 h-3" />
-                <span>Connected</span>
-              </>
-            ) : (
-              <>
-                <WifiOff className="w-3 h-3" />
-                <span>{connectionState.error || 'Disconnected'}</span>
-              </>
-            )}
-          </div>
-          <button 
-            onClick={toggleFullscreen}
-            className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
-          >
-            <Maximize2 className="w-4 h-4 text-zinc-400" />
-          </button>
-        </div>
+        <button className="p-2 hover:bg-zinc-800 rounded-lg transition-colors">
+          <Maximize2 className="w-4 h-4 text-zinc-400" />
+        </button>
       </div>
 
-      <div className="flex-1 bg-zinc-950 rounded-lg border border-zinc-800 relative overflow-hidden">
-        {/* Video Feed from Flask Backend */}
-        {!imageError ? (
-          <img
-            src={videoFeedUrl}
-            alt="Live Vision Feed"
-            className="w-full h-full object-contain"
-            onError={handleImageError}
-            onLoad={handleImageLoad}
-          />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-zinc-800 via-zinc-900 to-zinc-950 flex items-center justify-center">
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-3 bg-zinc-800 rounded-lg flex items-center justify-center">
-                <Video className="w-8 h-8 text-zinc-600" />
-              </div>
-              <p className="text-zinc-600 text-sm">
-                {isConnected ? 'Waiting for video stream...' : 'Backend not connected'}
-              </p>
-              <p className="text-zinc-700 text-xs mt-1">{videoFeedUrl}</p>
+      <div className="flex-1 bg-zinc-950 rounded-lg border border-zinc-800 relative overflow-hidden group">
+        {/* Real Video Feed */}
+        <img 
+          src={videoUrl} 
+          alt="Live Stream"
+          className="absolute inset-0 w-full h-full object-cover opacity-90"
+        />
+
+        {/* Bounding Box Overlay */}
+        {boxes.map((box) => (
+          <div
+            key={box.id}
+            className="absolute border-2 border-cyan-400 rounded transition-all duration-75 ease-linear"
+            style={{
+              left: `${box.x}%`,
+              top: `${box.y}%`,
+              width: `${box.width}%`,
+              height: `${box.height}%`,
+            }}
+          >
+            <div className="absolute -top-6 left-0 bg-cyan-400 text-zinc-900 px-1.5 py-0.5 text-[10px] font-bold rounded shadow-sm whitespace-nowrap">
+              ID: {box.id} • {(box.confidence * 100).toFixed(0)}%
             </div>
           </div>
-        )}
+        ))}
 
-        {/* Recording indicator */}
-        <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-500/20 border border-red-500/30 px-3 py-1.5 rounded-lg">
-          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-red-500 animate-pulse' : 'bg-zinc-600'}`}></div>
-          <span className={`text-xs font-medium ${isConnected ? 'text-red-400' : 'text-zinc-500'}`}>
-            {isConnected ? 'LIVE' : 'OFFLINE'}
-          </span>
-        </div>
-
-        {/* FPS Counter - Real data from backend */}
-        <div className="absolute top-4 right-4 bg-zinc-900/80 border border-zinc-700 px-3 py-1.5 rounded-lg">
-          <span className="text-zinc-300 text-xs font-mono">
-            {trackingData.fps.toFixed(1)} FPS
-          </span>
-        </div>
-
-        {/* Detection count - Real data */}
-        <div className="absolute bottom-4 left-4 bg-zinc-900/80 border border-zinc-700 px-3 py-1.5 rounded-lg">
-          <span className="text-cyan-400 text-xs font-medium">
-            {activePeople.length} {activePeople.length === 1 ? 'person' : 'people'} detected
-          </span>
-        </div>
-
-        {/* Active tracks list */}
-        {activePeople.length > 0 && (
-          <div className="absolute bottom-4 right-4 bg-zinc-900/90 border border-zinc-700 px-3 py-2 rounded-lg max-h-32 overflow-y-auto">
-            <div className="text-zinc-400 text-xs mb-1.5 font-medium">Active Tracks</div>
-            <div className="space-y-1">
-              {activePeople.slice(0, 5).map((person) => (
-                <div key={person.id} className="flex items-center gap-2 text-xs">
-                  <div 
-                    className="w-2 h-2 rounded-full" 
-                    style={{ backgroundColor: getBoxColor(person) }}
-                  />
-                  <span className="text-zinc-300">ID {person.id}</span>
-                  {person.real_world && (
-                    <span className="text-zinc-500 font-mono">
-                      ({person.real_world.x.toFixed(1)}, {person.real_world.y.toFixed(1)})
-                    </span>
-                  )}
-                </div>
-              ))}
-              {activePeople.length > 5 && (
-                <div className="text-zinc-500 text-xs">
-                  +{activePeople.length - 5} more
-                </div>
-              )}
-            </div>
+        {/* HUD Elements */}
+        <div className="absolute top-4 right-4 flex flex-col gap-2 items-end">
+          <div className="bg-black/60 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-lg flex items-center gap-2">
+            <Activity className="w-3 h-3 text-emerald-400" />
+            <span className="text-white text-xs font-mono">{fps.toFixed(1)} FPS</span>
           </div>
-        )}
+        </div>
+
+        <div className="absolute bottom-4 left-4">
+          <div className="bg-black/60 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-lg">
+            <span className="text-cyan-400 text-xs font-medium">{activeCount} Objects Tracked</span>
+          </div>
+        </div>
       </div>
     </div>
   );

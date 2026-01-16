@@ -128,18 +128,19 @@ class CrowdHumanHailoDetector:
             print(f"⚠️ Cleanup warning: {e}")
 
 _detector_instance = None
-def get_hailo_detector(model_name: str = None, cv2_ref_passed=None, np_ref_passed=None) -> Optional[CrowdHumanHailoDetector]:
+
+def get_hailo_detector(model_name: str = None, cv2_ref_passed=None, np_ref_passed=None):
     """Get or create singleton CrowdHuman detector"""
     global _detector_instance
     
     if _detector_instance is None:
-        
+        # FIX: Pass the model_name to the constructor!
         if model_name:
             _detector_instance = CrowdHumanHailoDetector(hef_path=model_name)
         else:
             _detector_instance = CrowdHumanHailoDetector()
             
-        if not _detector_instance.device:
+        if _detector_instance.device is None:
             _detector_instance = None
     
     return _detector_instance

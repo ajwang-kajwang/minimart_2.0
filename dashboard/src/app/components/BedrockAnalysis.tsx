@@ -1,277 +1,202 @@
-import { Brain, Sparkles, MessageSquare, Send, Loader2 } from "lucide-react";
+import { Brain, Sparkles, Send, User, Bot, AlertTriangle, CheckCircle, Info } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
-import { useTrackingSocket } from "../hooks";
+import { socket } from "../services/socket"; // Import shared socket
 
-interface AnalysisEntry {
+interface Message {
   id: number;
+  type: "user" | "ai" | "system_info" | "system_warning" | "system_success";
+  text: string;
   timestamp: string;
-  message: string;
-  type: "info" | "warning" | "success" | "system";
-  source: "ai" | "system" | "user";
 }
 
-interface BedrockAnalysisProps {
-  backendUrl?: string;
-}
-
-export function BedrockAnalysis({ backendUrl = "http://localhost:5000" }: BedrockAnalysisProps) {
-  // 1. Destructure socket from the hook (ensure hook is updated to return this)
-  const { trackingData, activePeople, isConnected, socket } = useTrackingSocket({ url: backendUrl });
-  
-  const [entries, setEntries] = useState<AnalysisEntry[]>([]);
-  const [inputMessage, setInputMessage] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  
-  // Track previous state for generating insights
-  const prevActiveCount = useRef(0);
-  const lastInsightTime = useRef(0);
-
-  // Auto-scroll to bottom when new entries added
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+export function BedrockAnalysis() {
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: 1,
+      type: "ai",
+      text: "Hello. I am the Minimart AI Assistant. I can analyze store logs, check inventory, and answer questions about store security.",
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
-  }, [entries]);
+  ]);
+  const [inputValue, setInputValue] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 2. Listen for Real AI Responses from Flask
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
   useEffect(() => {
-    if (!socket) return;
+    scrollToBottom();
+  }, [messages, isTyping]);
 
-    const handleBedrockResponse = (data: { answer: string }) => {
-      addEntry({
-        message: data.answer,
-        type: "success",
-        source: "ai"
-      });
-      setIsProcessing(false);
-    };
+  useEffect(() => {
+    // 1. Connection Status Handlers
+    function onConnect() {
+      setIsConnected(true);
+    }
 
-    socket.on("bedrock_response", handleBedrockResponse);
+    function onDisconnect() {
+      setIsConnected(false);
+    }
+
+    // 2. Chat Response Handler (Answers to your questions)
+    function onBedrockResponse(data: { text: string }) {
+      setIsTyping(false);
+      addMessage("ai", data.text);
+    }
+
+    // 3. System Alert Handler (Unsolicited updates from IoT Core)
+    function onBedrockAlert(data: { message: string; type: string }) {
+      let msgType: Message['type'] = "system_info";
+      if (data.type === "warning") msgType = "system_warning";
+      if (data.type === "success") msgType = "system_success";
+      addMessage(msgType, data.message);
+    }
+
+    // Attach Listeners
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("bedrock_response", onBedrockResponse);
+    socket.on("bedrock_alert", onBedrockAlert);
+
+    // Initial check in case socket is already connected
+    if (socket.connected) setIsConnected(true);
 
     return () => {
-      socket.off("bedrock_response", handleBedrockResponse);
+      // Detach Listeners
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("bedrock_response", onBedrockResponse);
+      socket.off("bedrock_alert", onBedrockAlert);
     };
-  }, [socket]);
-
-  // Generate automatic insights based on tracking data (Client-side logic)
-  useEffect(() => {
-    const now = Date.now();
-    const timeSinceLastInsight = now - lastInsightTime.current;
-    
-    // Don't spam insights - minimum 5 seconds between auto-generated ones
-    if (timeSinceLastInsight < 5000) return;
-    
-    const currentCount = activePeople.length;
-
-    // Detect significant changes
-    if (currentCount !== prevActiveCount.current) {
-      const diff = currentCount - prevActiveCount.current;
-      
-      if (diff > 0) {
-        addEntry({
-          message: `${diff} new ${diff === 1 ? 'person' : 'people'} detected in frame. Total active: ${currentCount}`,
-          type: "info",
-          source: "system"
-        });
-      } else if (diff < 0 && prevActiveCount.current > 0) {
-        addEntry({
-          message: `${Math.abs(diff)} ${Math.abs(diff) === 1 ? 'person' : 'people'} left the frame. Remaining: ${currentCount}`,
-          type: "info", 
-          source: "system"
-        });
-      }
-      
-      prevActiveCount.current = currentCount;
-      lastInsightTime.current = now;
-    }
-  }, [activePeople.length]);
-
-  // Add initial system message
-  useEffect(() => {
-    if (entries.length === 0) {
-      addEntry({
-        message: "Minimart Analytics ready. I can help analyze customer traffic patterns, identify anomalies, and generate reports. What would you like to know?",
-        type: "system",
-        source: "ai"
-      });
-    }
   }, []);
 
-  const addEntry = (entry: Omit<AnalysisEntry, "id" | "timestamp">) => {
-    const timestamp = new Date().toLocaleTimeString('en-US', { 
-      hour12: false, 
-      hour: '2-digit', 
-      minute: '2-digit', 
-      second: '2-digit' 
-    });
-    
-    setEntries(prev => [...prev.slice(-19), { // Keep last 20 entries
-      ...entry,
-      id: Date.now(),
-      timestamp
-    }]);
+  const addMessage = (type: Message['type'], text: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        type,
+        text,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      },
+    ]);
   };
 
-  const handleSendMessage = () => {
-    if (!inputMessage.trim() || isProcessing) return;
+  const handleSend = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!inputValue.trim()) return;
+
+    // 1. Add User Message immediately
+    addMessage("user", inputValue);
     
-    const userMessage = inputMessage.trim();
-    setInputMessage("");
+    // 2. Emit to Backend
+    socket.emit("bedrock_query", { query: inputValue });
     
-    // Add user message to UI immediately
-    addEntry({
-      message: userMessage,
-      type: "info",
-      source: "user"
-    });
-    
-    setIsProcessing(true);
-    
-    // 3. Send Request to Python Backend via Socket.IO
-    if (socket && isConnected) {
-      socket.emit("ask_bedrock", { 
-        question: userMessage,
-        context: {
-            active_people: activePeople.length,
-            fps: trackingData.fps
-        }
-      });
-    } else {
-      // Fallback if disconnected
-      setTimeout(() => {
-          addEntry({
-              message: "Error: Connection to backend lost.",
-              type: "warning",
-              source: "system"
-          });
-          setIsProcessing(false);
-      }, 500);
-    }
+    // 3. Set Loading State
+    setInputValue("");
+    setIsTyping(true);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
-
-  const getTypeColor = (type: string, source: string) => {
-    if (source === "user") return "border-blue-500/20 bg-blue-500/5";
+  const renderIcon = (type: Message['type']) => {
     switch (type) {
-      case "warning":
-        return "border-amber-500/20 bg-amber-500/5";
-      case "success":
-        return "border-emerald-500/20 bg-emerald-500/5";
-      case "system":
-        return "border-purple-500/20 bg-purple-500/5";
-      default:
-        return "border-cyan-500/20 bg-cyan-500/5";
-    }
-  };
-
-  const getTypeDot = (type: string, source: string) => {
-    if (source === "user") return "bg-blue-400";
-    switch (type) {
-      case "warning":
-        return "bg-amber-400";
-      case "success":
-        return "bg-emerald-400";
-      case "system":
-        return "bg-purple-400";
-      default:
-        return "bg-cyan-400";
+      case "ai": return <Bot className="w-4 h-4 text-purple-400" />;
+      case "user": return <User className="w-4 h-4 text-zinc-400" />;
+      case "system_warning": return <AlertTriangle className="w-4 h-4 text-amber-400" />;
+      case "system_success": return <CheckCircle className="w-4 h-4 text-emerald-400" />;
+      default: return <Info className="w-4 h-4 text-cyan-400" />;
     }
   };
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 h-full flex flex-col">
-      <div className="flex items-center gap-2 mb-4">
-        <Brain className="w-5 h-5 text-purple-400" />
-        <h2 className="text-white font-semibold">Store Analytics</h2>
-        <Sparkles className="w-4 h-4 text-purple-400 ml-1" />
-        <div className="ml-auto flex items-center gap-1.5 text-xs">
-          <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
-          <span className={isConnected ? 'text-emerald-400' : 'text-zinc-500'}>
-            {isConnected ? 'Live' : 'Offline'}
-          </span>
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg h-full flex flex-col overflow-hidden shadow-sm">
+      {/* Header */}
+      <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50 backdrop-blur-sm">
+        <div className="flex items-center gap-2">
+          <Brain className="w-5 h-5 text-purple-400" />
+          <h2 className="text-white font-semibold">Store Manager Assistant</h2>
+          <Sparkles className="w-3 h-3 text-purple-400 animate-pulse" />
         </div>
+        <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500'}`} />
       </div>
 
       {/* Messages Area */}
-      <div 
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto space-y-3 pr-2 mb-4"
-      >
-        {entries.map((entry) => (
-          <div
-            key={entry.id}
-            className={`border rounded-lg p-3 ${getTypeColor(entry.type, entry.source)} transition-all`}
-          >
-            <div className="flex items-start gap-3">
-              <div className={`w-2 h-2 ${getTypeDot(entry.type, entry.source)} rounded-full mt-1.5 flex-shrink-0`}></div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs text-zinc-500 font-mono">{entry.timestamp}</span>
-                  {entry.source === "ai" && (
-                    <span className="text-xs text-purple-400 font-medium">AI</span>
-                  )}
-                  {entry.source === "user" && (
-                    <span className="text-xs text-blue-400 font-medium">You</span>
-                  )}
-                  {entry.source === "system" && (
-                    <span className="text-xs text-cyan-400 font-medium">System</span>
-                  )}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-zinc-950/30">
+        {messages.map((msg) => {
+          const isSystem = msg.type.startsWith("system");
+          const isUser = msg.type === "user";
+
+          if (isSystem) {
+            let borderColor = "border-cyan-500/20 bg-cyan-500/5";
+            if (msg.type === "system_warning") borderColor = "border-amber-500/20 bg-amber-500/5";
+            if (msg.type === "system_success") borderColor = "border-emerald-500/20 bg-emerald-500/5";
+
+            return (
+              <div key={msg.id} className={`flex items-start gap-3 p-3 rounded-lg border ${borderColor} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                <div className="mt-0.5">{renderIcon(msg.type)}</div>
+                <div className="flex-1">
+                  <p className="text-sm text-zinc-300">{msg.text}</p>
+                  <span className="text-[10px] text-zinc-500 font-mono mt-1 block">{msg.timestamp}</span>
                 </div>
-                <p className="text-sm text-zinc-300">{entry.message}</p>
+              </div>
+            );
+          }
+
+          return (
+            <div key={msg.id} className={`flex gap-3 ${isUser ? "flex-row-reverse" : "flex-row"} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isUser ? "bg-zinc-800" : "bg-purple-500/10 border border-purple-500/20"}`}>
+                {renderIcon(msg.type)}
+              </div>
+              
+              <div className={`max-w-[85%] rounded-lg p-3 ${isUser ? "bg-zinc-800 text-zinc-200" : "bg-zinc-900 border border-zinc-800 text-zinc-300"}`}>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                <span className="text-[10px] text-zinc-500 mt-2 block opacity-70">{msg.timestamp}</span>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         
-        {isProcessing && (
-          <div className="flex items-center gap-2 text-purple-400 text-sm p-3">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            <span>Analyzing...</span>
+        {isTyping && (
+          <div className="flex gap-3 animate-in fade-in duration-300">
+             <div className="w-8 h-8 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
+                <Bot className="w-4 h-4 text-purple-400" />
+             </div>
+             <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 flex items-center gap-1">
+                <div className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                <div className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                <div className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" />
+             </div>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Input Area */}
-      <div className="border-t border-zinc-800 pt-4">
-        <div className="flex items-center gap-2">
-          <div className="flex-1 relative">
-            <MessageSquare className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Ask about traffic patterns, generate reports..."
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg pl-10 pr-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/25"
-              disabled={isProcessing || !isConnected}
-            />
-          </div>
+      <div className="p-4 bg-zinc-900 border-t border-zinc-800">
+        <form onSubmit={handleSend} className="relative">
+          <input
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder={isConnected ? "Ask about inventory, anomalies..." : "Connecting to brain..."}
+            disabled={!isConnected}
+            className="w-full bg-zinc-950 border border-zinc-800 text-zinc-300 rounded-lg pl-4 pr-12 py-3 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder:text-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          />
           <button
-            onClick={handleSendMessage}
-            disabled={!inputMessage.trim() || isProcessing || !isConnected}
-            className="p-2.5 bg-purple-500 hover:bg-purple-600 disabled:bg-zinc-700 disabled:cursor-not-allowed rounded-lg transition-colors"
+            type="submit"
+            disabled={!inputValue.trim() || !isConnected}
+            className="absolute right-2 top-2 p-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isProcessing ? (
-              <Loader2 className="w-4 h-4 text-white animate-spin" />
-            ) : (
-              <Send className="w-4 h-4 text-white" />
-            )}
+            <Send className="w-4 h-4" />
           </button>
-        </div>
-        
-        <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
-          <span>AI Model: Claude 3.5 Sonnet</span>
-          <div className="flex items-center gap-1">
-            <div className={`w-1.5 h-1.5 bg-purple-400 rounded-full ${isConnected ? 'animate-pulse' : ''}`}></div>
-            <span className="text-purple-400">{isConnected ? 'Bedrock Connected' : 'Waiting for connection...'}</span>
-          </div>
+        </form>
+        <div className="text-[10px] text-center text-zinc-600 mt-2 flex justify-center items-center gap-1.5">
+          <span>Powered by AWS Bedrock</span>
+          <span className="w-0.5 h-0.5 rounded-full bg-zinc-600" />
+          <span>Claude 3.5 Sonnet</span>
         </div>
       </div>
     </div>

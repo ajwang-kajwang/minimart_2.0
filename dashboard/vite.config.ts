@@ -14,10 +14,10 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  // --- THIS IS THE CRITICAL PART FOR PI ACCESS ---
   server: {
-    host: true,       // Listen on all IPs (allows network access)
+    host: true,       // Listen on All IPs
     port: 5173,       // Lock the port
-    strictPort: true, // Don't switch ports if busy
+    strictPort: true, 
+    allowedHosts: true // Allow Tailscale/Network connections
   }
 })

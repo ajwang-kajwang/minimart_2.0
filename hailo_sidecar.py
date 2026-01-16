@@ -3,50 +3,75 @@ import cv2
 import numpy as np
 import sys
 import os
+import logging
 
-# Import your existing Hailo wrapper
+# Setup logging to see errors in real-time
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("HailoSidecar")
+
+# Import your wrapper
 from crowdhuman_hailo_detector import get_hailo_detector
 
 app = Flask(__name__)
 
-# Initialize the detector once on startup
 print("🚀 Loading Hailo Detector on Host...")
-# Ensure we point to the correct model path on the host
-model_path = "models/crowdhuman.hef"
+# 1. POINT TO YOUR YOLO FILE
+model_path = "models/yolov8s_h8l.hef"
 
 if not os.path.exists(model_path):
-    print(f"❌ Error: Model not found at {model_path}")
+    logger.error(f"❌ Error: Model not found at {model_path}")
     sys.exit(1)
 
-detector = get_hailo_detector(model_path)
-print("✅ Hailo Detector Ready and Listening on Port 6000")
+# 2. LOAD DETECTOR
+try:
+    detector = get_hailo_detector(model_name=model_path)
+    print(f"✅ Hailo Detector Loaded: {model_path}")
+except Exception as e:
+    logger.error(f"❌ Failed to load detector: {e}")
+    sys.exit(1)
 
 @app.route('/detect', methods=['POST'])
 def detect():
     try:
-        # 1. Receive Image
+        # A. Receive Image
+        if 'image' not in request.files:
+            return jsonify({"error": "No image part"}), 400
+            
         file = request.files['image']
         npimg = np.frombuffer(file.read(), np.uint8)
         frame = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
 
-        # 2. Inference (Hardware Accel)
+        if frame is None:
+            return jsonify({"error": "Failed to decode image"}), 400
+
+        # B. Inference (Wrapped in try/except to prevent crash)
         detections = detector.detect(frame)
 
-        # 3. Format Response
+        # C. Format Response (Robust Filtering)
         results = []
         for d in detections:
-            # Convert numpy/custom types to standard Python types for JSON
-            results.append({
-                'bbox': [float(x) for x in d['bbox']],
-                'confidence': float(d['confidence']),
-                'class_id': int(d['class_id'])
-            })
+            # 1. Safe Class ID Extraction
+            class_id = int(d.get('class_id', -1))
+            
+            # 2. FILTER: Only allow Class 0 (Person)
+            # If we don't do this, it detects chairs/tables and might crash 
+            # if the label list doesn't have names for them.
+            if class_id == 0:
+                results.append({
+                    'bbox': [float(x) for x in d['bbox']], # Force float
+                    'confidence': float(d['confidence']),  # Force float
+                    'class_id': 0,
+                    'label': 'person'
+                })
         
         return jsonify(results)
+
     except Exception as e:
-        print(f"Inference Error: {e}")
-        return jsonify([]), 500
+        # CATCH ALL CRASHES so the server stays alive
+        logger.error(f"⚠️ Inference Error: {e}")
+        # Return empty list so Docker keeps running instead of crashing
+        return jsonify([]) 
 
 if __name__ == '__main__':
-    # Listen on all interfaces so Docker can reach it
+    # Threaded=True allows multiple requests without blocking
     app.run(host='0.0.0.0', port=6000, threaded=True)
