@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+
+# Models & Weights
+*.pt
+*.engine
+*.onnx
+*.hef
+models/*.engine
+models/*.pt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node.js (dashboard)
+node_modules/
+dashboard/node_modules/
+dashboard/dist/
+dashboard/.vite/
+*.local
+
+# Calibration (user-specific)
+coordinate_calibration.json
+
+# Jupyter
+.ipynb_checkpoints/
