@@ -16,7 +16,7 @@ from flask_cors import CORS
 from domain.interfaces import ICameraSource, IDetector, ITracker
 
 # Import Concrete Services
-from infrastructure.camera import CameraService, get_camera_service
+from infrastructure.camera import get_camera_service
 from services.detection import DetectionService
 from services.tracking import TrackingService
 from services.geometry import GeometryService
