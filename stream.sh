@@ -15,5 +15,5 @@ export CAMERA_WIDTH=1280
 export CAMERA_HEIGHT=720
 export CAMERA_FPS=30
 
-echo "🚀 Starting Minimart (Hardware Accelerated Mode)..."
+echo "🚀 Starting Minimart"
 python3 main.py

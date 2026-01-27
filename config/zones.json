@@ -1,0 +1,37 @@
+[
+  {
+    "id": "aisle_1",
+    "name": "Dairy & Beverages",
+    "description": "Aisle containing milk, cheese, soda, and water.",
+    "type": "aisle",
+    "polygon": [[150, 20], [350, 20], [350, 560], [150, 560]]
+  },
+  {
+    "id": "aisle_2",
+    "name": "Pantry & Baking",
+    "description": "Center aisle with dry goods, pasta, flour, and sugar.",
+    "type": "aisle",
+    "polygon": [[530, 20], [730, 20], [730, 560], [530, 560]]
+  },
+  {
+    "id": "aisle_3",
+    "name": "Produce & Deli",
+    "description": "Fresh fruits, vegetables, bakery, and sliced meats.",
+    "type": "aisle",
+    "polygon": [[910, 20], [1110, 20], [1110, 560], [910, 560]]
+  },
+  {
+    "id": "svc_checkout",
+    "name": "Checkout Zone",
+    "description": "Cashier counters and self-checkout kiosks.",
+    "type": "service",
+    "polygon": [[30, 580], [430, 580], [430, 700], [30, 700]]
+  },
+  {
+    "id": "svc_entrance",
+    "name": "Entrance",
+    "description": "Main store entry and cart collection.",
+    "type": "service",
+    "polygon": [[850, 580], [1250, 580], [1250, 700], [850, 700]]
+  }
+]
