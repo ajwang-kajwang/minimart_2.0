@@ -1,8 +1,16 @@
+"""
+Geometry Service - Unified (Homography + Zones)
+Handles both 3D World Mapping and 2D Semantic Zones.
+"""
 import json
+import os
 import numpy as np
 import cv2
-import os
+from typing import List, Tuple
 
+# ==========================================
+# PART 1: HOMOGRAPHY (The Pi's Existing Logic)
+# ==========================================
 class GeometryService:
     """
     Handles geometric transformations and coordinate mapping.
@@ -42,7 +50,6 @@ class GeometryService:
         
         try:
             # Ensure points are in correct format for cv2.perspectiveTransform
-            # Input shape must be (N, 1, 2)
             if isinstance(pixel_points, (list, tuple)):
                 points = np.array([[pixel_points]], dtype=np.float32)
             else:
@@ -50,11 +57,42 @@ class GeometryService:
             
             # Apply transformation
             world_points = cv2.perspectiveTransform(points, self.homography_matrix)
-            
-            # Return flattened result
             result = world_points.reshape(-1, 2)[0]
             return (float(result[0]), float(result[1]))
             
         except Exception as e:
-            # Fail silently or log if needed to prevent stream crash
             return (0.0, 0.0)
+
+# ==========================================
+# PART 2: SEMANTIC ZONES (The Jetson's Logic)
+# ==========================================
+class Zone:
+    def __init__(self, data: dict):
+        self.id = data.get('id', 'unknown')
+        self.name = data.get('name', 'Unnamed Zone')
+        self.description = data.get('description', '')
+        self.type = data.get('type', 'aisle')
+        # Convert list of lists to numpy array
+        self.polygon = np.array(data['polygon'], dtype=np.int32)
+        
+    def contains(self, point: Tuple[int, int]) -> bool:
+        # Returns True if point (x,y) is inside the polygon
+        return cv2.pointPolygonTest(self.polygon, point, False) >= 0
+
+def get_store_zones() -> List[Zone]:
+    """Loads zones from config/zones.json"""
+    # Locate config/zones.json relative to this file
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    config_path = os.path.join(base_dir, 'config', 'zones.json')
+    
+    if not os.path.exists(config_path):
+        print(f"⚠️ Config not found at {config_path}, returning empty list.")
+        return []
+
+    try:
+        with open(config_path, 'r') as f:
+            data = json.load(f)
+            return [Zone(z) for z in data]
+    except Exception as e:
+        print(f"❌ Error loading zones.json: {e}")
+        return []

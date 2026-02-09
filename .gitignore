@@ -10,4 +10,6 @@ dist/
 domain/__pycache__/interfaces.cpython-311.pyc
 infrastructure/__pycache__/camera.cpython-311.pyc
 services/__pycache__
-
+venv
+yolov8s.pt
+hailort.1.log

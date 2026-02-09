@@ -1,191 +1,139 @@
 #!/usr/bin/env python3
 """
-Minimart Tracking System - Main Orchestrator
+Minimart Pi 5 Production - API Server
+Role: Provides Video Stream & Real-time Data to React Frontend
 """
 
 import cv2
 import time
 import threading
-import json
 import numpy as np
+import os
 from flask import Flask, Response, jsonify
 from flask_socketio import SocketIO
+from flask_cors import CORS
 
-# Import Domain Interfaces 
-from domain.interfaces import ICameraSource, IDetector, ITracker
-
-# Import Concrete Services 
+# --- HARDWARE IMPORTS ---
 from infrastructure.camera import CameraService
-from services.detection import DetectionService
-from services.tracking import TrackingService
-from services.geometry import GeometryService
+from services.detection import DetectionService 
 
-# --- Main Application Orchestrator ---
-class MinimartTrackerApp:
-    def __init__(self, camera: ICameraSource, detector: IDetector, tracker: ITracker, geometry: GeometryService):
-    
-        self.camera = camera
-        self.detector = detector
-        self.tracker = tracker
-        self.geometry = geometry
+# --- LOGIC IMPORTS ---
+from services.tracking import TrackingService
+from services.analytics import AnalyticsService
+
+class MinimartPiApp:
+    def __init__(self):
+        # 1. Initialize Hardware
+        print("🔌 Initializing Pi 5 Hardware...")
+        self.camera = CameraService()
+        self.detector = DetectionService(confidence_threshold=0.5) 
         
-        # Application State
+        # 2. Initialize Logic
+        self.tracker = TrackingService(max_distance=150, max_age=30)
+        self.analytics = AnalyticsService()
+        
+        # State
         self.running = False
         self.current_frame = None
-        self.tracked_people = []
-        self.fps = 0
+        self.fps = 0.0
         self.lock = threading.Lock()
         
-        # Web Server Setup
+        # 3. Initialize API Server
         self.app = Flask(__name__)
-        self.app.config['SECRET_KEY'] = 'minimart_solid_refactor'
-        self.socketio = SocketIO(self.app, cors_allowed_origins="*")
+        self.app.config['SECRET_KEY'] = 'minimart_pi_prod'
+        
+        # ENABLE CORS: Allow React (on any port) to access this API
+        CORS(self.app, resources={r"/*": {"origins": "*"}})
+        self.socketio = SocketIO(self.app, cors_allowed_origins="*", async_mode='gevent')
+        
         self._setup_routes()
 
     def _setup_routes(self):
         @self.app.route('/')
         def index():
-            return "Minimart Tracking System Active (See /video_feed)"
+            return jsonify({
+                'status': 'Online', 
+                'service': 'Minimart Orchestrator',
+                'endpoints': ['/video_feed', '/api/status']
+            })
 
         @self.app.route('/video_feed')
         def video_feed():
-            return Response(self._generate_frames(),
-                          mimetype='multipart/x-mixed-replace; boundary=frame')
+            return Response(self._generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
         
-        @self.app.route('/api/coordinates')
-        def api_coordinates():
-            with self.lock:
-                active = [p for p in self.tracked_people if p['active']]
-                return jsonify({
-                    'active_count': len(active),
-                    'total_tracks': len(self.tracked_people),
-                    'fps': self.fps,
-                    'people': self.tracked_people
-                })
+        @self.app.route('/api/status')
+        def api_status():
+            return jsonify({'fps': self.fps, 'active_tracks': len(self.analytics.people_stats)})
 
     def _generate_frames(self):
         while True:
+            time.sleep(0.04) # Cap streaming at ~25 FPS
             with self.lock:
                 if self.current_frame is not None:
-                    ret, buffer = cv2.imencode('.jpg', self.current_frame)
-                    if ret:
-                        frame_bytes = buffer.tobytes()
-                        yield (b'--frame\r\n'
-                               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-            time.sleep(0.033)
+                    try:
+                        ret, buffer = cv2.imencode('.jpg', self.current_frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
+                        if ret:
+                            yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+                    except Exception:
+                        pass
 
     def _processing_loop(self):
-        print("🔄 Starting processing loop...")
+        print("🔄 Pi 5 Processing Loop Started...")
         frame_count = 0
         start_time = time.time()
         last_emit = time.time()
-
+        
         while self.running:
-            # 1. Hardware Access (via Interface)
             success, frame = self.camera.get_frame()
             if not success:
                 time.sleep(0.01)
                 continue
-
-            # 2. Detection (via Interface)
-            detections = self.detector.detect(frame)
-
-            # 3. Tracking (via Interface)
-            tracks = self.tracker.update(detections)
-
-            # 4. Coordinate Mapping (via GeometryService)
-            for person in tracks:
-                cx = person['x'] + person['width'] / 2
-                cy = person['y'] + person['height'] / 2
-                
-                # Delegate math to service
-                world_x, world_y = self.geometry.pixel_to_world((cx, cy))
-                
-                person['center_pixel'] = (cx, cy)
-                person['real_world'] = {
-                    'x': world_x,
-                    'y': world_y
-                }
-
-            # 5. Visualization (Presentation Logic)
-            annotated_frame = frame.copy()
-            for p in tracks:
-                x, y, w, h = int(p['x']), int(p['y']), int(p['width']), int(p['height'])
-                color = p['color']
-                cv2.rectangle(annotated_frame, (x, y), (x+w, y+h), color, 2)
-                
-                label = f"ID {p['id']}"
-                if 'real_world' in p:
-                    label += f" ({p['real_world']['x']:.1f}, {p['real_world']['y']:.1f})"
-                
-                # Draw label background
-                (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
-                cv2.rectangle(annotated_frame, (x, y-th-10), (x+tw, y), color, -1)
-                cv2.putText(annotated_frame, label, (x, y-5), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 2)
-
-            # 6. Update State (Thread Safe)
-            with self.lock:
-                self.current_frame = annotated_frame
-                self.tracked_people = tracks
             
-            # 7. Metrics & WebSocket
+            # 1. Inference & Tracking
+            detections = self.detector.detect(frame)
+            tracks = self.tracker.update(detections)
+            self.analytics.update(tracks)
+            
+            # 2. Update Current Frame (Raw, no drawing needed as React draws boxes)
+            # We send raw frames to keep the stream clean, or we can draw debug info.
+            # For this dashboard, let's keep it clean since React draws the overlay.
+            with self.lock:
+                self.current_frame = frame.copy()
+            
+            # 3. Stats Calculation
             frame_count += 1
             if time.time() - start_time > 1.0:
                 self.fps = frame_count / (time.time() - start_time)
-                frame_count = 0
-                start_time = time.time()
-                print(f"FPS: {self.fps:.1f} | Active: {len([t for t in tracks if t['active']])}")
-
-            if time.time() - last_emit > 0.1: # 100ms emit rate
-                with self.lock:
-                    # Filter only active people for the API/Socket update
-                    active_tracks = [p for p in tracks if p['active']]
-                    self.socketio.emit('coordinate_tracking_update', {
-                        'active_count': len(active_tracks),
-                        'fps': self.fps,
-                        'people': tracks
-                    })
+                print(f"📊 FPS: {self.fps:.1f} | Active: {len(tracks)}")
+                frame_count, start_time = 0, time.time()
+                
+            # 4. Socket Broadcast (The Fix)
+            if time.time() - last_emit > 0.1: # 10Hz updates
+                active_count = len([t for t in tracks if t.get('active')])
+                
+                # CRITICAL: This structure matches VisionFeed.tsx exactly
+                self.socketio.emit('coordinate_tracking_update', {
+                    'fps': self.fps,               # Fixes the .toFixed crash
+                    'active_count': active_count,  # Fixes the object count
+                    'people': tracks,              # Used for bounding boxes
+                    'analytics_summary': self.analytics.get_llm_context()
+                })
                 last_emit = time.time()
 
     def start(self):
         self.running = True
-        
-        # Start Processing Thread
-        process_thread = threading.Thread(target=self._processing_loop)
-        process_thread.daemon = True
-        process_thread.start()
-        
-        # Start Web Server
-        print("Minimart Tracker Started (http://0.0.0.0:5000)")
+        threading.Thread(target=self._processing_loop, daemon=True).start()
+        print("🚀 MINIMART API READY: http://0.0.0.0:5000")
         try:
-            self.socketio.run(self.app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
+            self.socketio.run(self.app, host='0.0.0.0', port=5000, debug=False)
         except KeyboardInterrupt:
             self.stop()
 
     def stop(self):
-        print("Stopping...")
         self.running = False
         self.camera.release()
+        print("🛑 System Stopped")
 
 if __name__ == "__main__":
-    # --- Composition Root ---
-    # Classes are instantiated.
-    # All services are wired together here and injected into the application.
-    
-    # 1. Initialize Services
-    camera_svc = CameraService()
-    detection_svc = DetectionService(confidence_threshold=0.4)
-    tracking_svc = TrackingService(max_distance=150)
-    geometry_svc = GeometryService(calibration_file="coordinate_calibration.json")
-
-    # 2. Inject Dependencies
-    app = MinimartTrackerApp(
-        camera=camera_svc,
-        detector=detection_svc,
-        tracker=tracking_svc,
-        geometry=geometry_svc
-    )
-    
-    # 3. Launch Application
+    app = MinimartPiApp()
     app.start()
