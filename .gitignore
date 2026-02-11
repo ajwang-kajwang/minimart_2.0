@@ -1,16 +1,15 @@
 models/crowdhuman.hef
-__pycache__/crowdhuman_hailo_detector.cpython-311.pyc
 hailort.log
-get-docker.sh
 models/yolov8s.pt
-dashboard/node_modules/
 dist/
 .env
 .DS_Store
-domain/__pycache__/interfaces.cpython-311.pyc
-infrastructure/__pycache__/camera.cpython-311.pyc
 services/__pycache__
 venv
 yolov8s.pt
 hailort.1.log
 
+minimart_final/dashboard/.next
+minimart_final/dashboard/node_modules
+minimart_final/services/__pycache__/
+minimart_final/infrastructure/__pycache__/
