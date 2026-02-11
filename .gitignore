@@ -9,8 +9,8 @@ venv
 yolov8s.pt
 hailort.1.log
 
-minimart/dashboard/.next
-minimart/dashboard/node_modules
-minimart/services/__pycache__/
-minimart/infrastructure/__pycache__/
-
+dashboard/.next
+dashboard/node_modules
+services/__pycache__/
+infrastructure/__pycache__/
+domain/__pycache__/
