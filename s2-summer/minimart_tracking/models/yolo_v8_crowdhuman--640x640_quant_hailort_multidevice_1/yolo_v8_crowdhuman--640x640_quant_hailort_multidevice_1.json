@@ -1,0 +1,33 @@
+{
+    "ConfigVersion": 11,
+    "Checksum": "20049535efd8dde70002a198afc60ce02d40d92cc7551c39f5236bcd76f5853d",
+    "DEVICE": [
+        {
+            "DeviceType": "HAILO8L",
+            "RuntimeAgent": "HAILORT",
+            "SupportedDeviceTypes": "HAILORT/HAILO8L, HAILORT/HAILO8",
+            "EagerBatchSize": 1
+        }
+    ],
+    "PRE_PROCESS": [
+        {
+            "InputN": 1,
+            "InputH": 640,
+            "InputW": 640,
+            "InputC": 3,
+            "InputQuantEn": true
+        }
+    ],
+    "MODEL_PARAMETERS": [
+        {
+            "ModelPath": "yolo_v8_crowdhuman--640x640_quant_hailort_multidevice_1.hef"
+        }
+    ],
+    "POST_PROCESS": [
+        {
+            "OutputPostprocessType": "DetectionYoloHailo",
+            "OutputNumClasses": 1,
+            "LabelsPath": "labels_yolo_v8_crowdhuman.json"
+        }
+    ]
+}
