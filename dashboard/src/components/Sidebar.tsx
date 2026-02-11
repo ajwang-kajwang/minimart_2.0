@@ -1,8 +1,8 @@
 'use client';
 
-import { LayoutDashboard, Map, Route, BarChart3, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, Video, Map, Route, BarChart3, MessageSquare } from 'lucide-react';
 
-export type ViewType = 'overview' | 'heatmap' | 'paths' | 'traffic' | 'ai';
+export type ViewType = 'overview' | 'live' | 'heatmap' | 'paths' | 'traffic' | 'ai';
 
 interface SidebarProps {
     currentView: ViewType;
@@ -11,6 +11,7 @@ interface SidebarProps {
 
 const menuItems = [
     { id: 'overview' as ViewType, label: 'Overview', icon: LayoutDashboard },
+    { id: 'live' as ViewType, label: 'Live Feed', icon: Video },
     { id: 'heatmap' as ViewType, label: 'Heatmap', icon: Map },
     { id: 'paths' as ViewType, label: 'Customer Routes', icon: Route },
     { id: 'traffic' as ViewType, label: 'Traffic Analysis', icon: BarChart3 },

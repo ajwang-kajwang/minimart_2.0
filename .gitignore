@@ -14,3 +14,4 @@ dashboard/node_modules
 services/__pycache__/
 infrastructure/__pycache__/
 domain/__pycache__/
+deploy-to-official.sh

@@ -10,9 +10,11 @@ import ShelfPerformanceTable from '@/components/ZonePerformanceTable';
 import StoreHeatmap from '@/components/StoreHeatmap';
 import ShopperPathsChart from '@/components/ShopperPathsChart';
 import AIAssistant from '@/components/AIAssistant';
+import LiveStream from '@/components/LiveStream';
 import DateRangeSelector from '@/components/DateRangeSelector';
 import Sidebar, { ViewType } from '@/components/Sidebar';
 import { RefreshCw, LogOut, Store, ChevronDown } from 'lucide-react';
+
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -112,6 +114,13 @@ export default function Dashboard() {
 
   const renderContent = () => {
     switch (currentView) {
+      case 'live':
+        return (
+          <div className="h-[calc(100vh-180px)]">
+            <LiveStream />
+          </div>
+        );
+
       case 'heatmap':
         return (
           <StoreHeatmap data={data.heatmapData} zones={data.zones} shelfCategories={data.shelfCategories} fullHeight={true} />
@@ -181,6 +190,7 @@ export default function Dashboard() {
 
   const getViewTitle = () => {
     switch (currentView) {
+      case 'live': return 'Live Feed';
       case 'heatmap': return 'Store Heatmap';
       case 'paths': return 'Customer Routes';
       case 'traffic': return 'Traffic Analysis';

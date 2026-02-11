@@ -4,6 +4,9 @@ Minimart Pi 5 Production - API Server
 Role: Provides Video Stream & Real-time Data to Next.js Frontend
 """
 
+from gevent import monkey
+monkey.patch_all()
+
 import cv2
 import time
 import threading
