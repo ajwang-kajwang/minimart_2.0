@@ -1,201 +1,128 @@
-# Minimart 2.0 - WebSocket Bridge Integration
 
-Real-time computer vision tracking system with React dashboard integration via WebSocket.
+# Minimart 2.0: AI Retail Analytics
+**Minimart 2.0** is an edge-computing solution for real-time retail analytics. It runs on the **Raspberry Pi 5** with the **Hailo-8L** NPU for high-performance, low-latency computer vision.
 
-## Architecture
+The system tracks customer movements, analyses dwell times, generates heatmaps, and provides a "Chat with your Store" AI assistant—processed locally on the edge.
+
+---
+
+## System Architecture
+
+The system follows a **Headless API** pattern to decouple high-speed inference from the modern UI.
+
+|**Component**|**Tech Stack**|**Port**|**Role**|
+|---|---|---|---|
+|**Backend**|Python 3.11, Flask, Socket.IO|`:5000`|Hardware control, AI Inference (Hailo), Tracking Logic, API Server.|
+|**Frontend**|Next.js 14, React, Tailwind, Recharts|`:3000`|Interactive Dashboard, Real-time Charts, Live Video Stream.|
+|**AI Engine**|YOLOv8 (Hailo-8L HEF), CrowdHuman|N/A|Person detection running at ~30 FPS on the Hailo-8L NPU.|
+|**Camera**|`rpicam-vid` (Native), OpenCV|N/A|Zero-copy video capture pipeline via raw YUV stream.|
+
+---
+
+## Hardware Requirements
+
+- **Raspberry Pi 5** (4GB or 8GB recommended).
+    
+- **Hailo-8L AI Kit** (M.2 HAT + Hailo-8L Module).
+    
+- **Raspberry Pi Camera Module 
+
+---
+
+## Installation & Setup
+
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         React Dashboard                              │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌─────────────┐ │
-│  │  VisionFeed  │ │  Bedrock     │ │   Device     │ │  Container  │ │
-│  │  Component   │ │  Analysis    │ │  Telemetry   │ │   Health    │ │
-│  └──────┬───────┘ └──────┬───────┘ └──────┬───────┘ └──────┬──────┘ │
-│         │                │                │                │        │
-│  ┌──────▼────────────────▼────────────────▼────────────────▼──────┐ │
-│  │              useTrackingSocket / useTelemetry Hooks             │ │
-│  └───────────────────────────────┬────────────────────────────────┘ │
-└──────────────────────────────────┼──────────────────────────────────┘
-                                   │ WebSocket + REST
-                                   ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                        Flask Backend                                 │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │                    Flask-SocketIO Server                      │   │
-│  │         Events: coordinate_tracking_update, telemetry_update  │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-│                                                                      │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌─────────────┐ │
-│  │   Camera     │ │  Detection   │ │   Tracking   │ │  Telemetry  │ │
-│  │   Service    │ │   Service    │ │   Service    │ │   Service   │ │
-│  └──────────────┘ └──────────────┘ └──────────────┘ └─────────────┘ │
-└─────────────────────────────────────────────────────────────────────┘
-```
+cd ~/minimart_2.0
 
-## Quick Start
+# Create Virtual Environment (System packages enabled for Hailo compatibility)
+python3 -m venv venv --system-site-packages
+source venv/bin/activate
 
-### 1. Start the Backend (Python/Flask)
-
-```bash
-cd minimart_2.0
-
-# Install dependencies
+# Install Dependencies
 pip install -r requirements.txt
-
-# Start the backend
-python main.py
 ```
 
-The backend will be available at:
-- API: `http://localhost:5000`
-- Video Feed: `http://localhost:5000/video_feed`
-- WebSocket: `ws://localhost:5000`
+---
 
-### 2. Start the Dashboard (React/Vite)
+## How to Run
 
-```bash
-cd minimart_2.0/dashboard
+You need two terminal windows to run the full stack.
+### Terminal 1: The Backend 
 
-# Install dependencies
-npm install
+This starts the Camera, Hailo Detector, and Flask Server.
 
-# Start development server
+Bash
+
+```
+cd ~/minimart_2.0
+./run.sh
+```
+### Terminal 2: The Frontend (Dashboard)
+
+This starts the Next.js User Interface.
+
+Bash
+
+```
+cd ~/minimart_2.0/dashboard
 npm run dev
 ```
 
-The dashboard will be available at `http://localhost:5173`
+- **Access the Dashboard:** Open your browser to `http://localhost:3000` (or your Pi's IP address: `http://<PI_IP>:3000`).
 
-## API Endpoints
+---
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Service info and available endpoints |
-| `/video_feed` | GET | MJPEG video stream |
-| `/api/coordinates` | GET | Current tracking data |
-| `/api/telemetry` | GET | Device metrics + container health |
-| `/api/telemetry/device` | GET | Device metrics only |
-| `/api/telemetry/containers` | GET | Container health only |
-| `/api/stats` | GET | Session statistics |
-| `/health` | GET | Health check |
+## Key Features
 
-## WebSocket Events
+### 1. Live Computer Vision Feed
 
-### Server → Client
+- Real-time video stream embedded directly in the dashboard.
+    
+- **Hardware Accelerated:** Uses `rpicam-vid` pipe to bypass GStreamer overhead.
+    
+- **Visuals:** Bounding boxes and FPS overlays are burned into the stream for easy debugging.
+    
 
-| Event | Data | Description |
-|-------|------|-------------|
-| `coordinate_tracking_update` | `{active_count, fps, people, timestamp}` | Real-time tracking updates (~10Hz) |
-| `telemetry_update` | `{device, containers, is_raspberry_pi}` | System metrics (~0.5Hz) |
+### 2. Tracking & Analytics
 
-### Client → Server
+- **Multi-Object Tracking (MOT):** Assigns persistent IDs to shoppers using spatial logic.
+    
+- **Zone Analytics:** Detects which "Aisle" or "Zone" a shopper is currently in.
+    
+- **Dwell Time:** Calculates how long customers stay in specific areas.
+    
 
-| Event | Description |
-|-------|-------------|
-| `request_telemetry` | Manually request telemetry data |
+### 3. "Ask Your Store" AI Assistant
 
-## React Hooks
+- Integrated Chatbot powered by OpenAI (via Proxy) or AWS Bedrock.
+    
+- **Context Aware:** The bot has access to real-time stats (e.g., _"How many people are in the store right now?"_).
+    
 
-### useTrackingSocket
-
-```typescript
-const { 
-  trackingData,      // Current tracking state
-  isConnected,       // WebSocket connection status
-  activePeople,      // Filtered active tracks
-  fpsHistory,        // Historical FPS data (last 60 samples)
-  countHistory,      // Historical count data (last 60 samples)
-  connect,           // Manual connect function
-  disconnect         // Manual disconnect function
-} = useTrackingSocket({ 
-  url: 'http://localhost:5000' 
-});
-```
-
-### useTelemetry
-
-```typescript
-const {
-  device,            // CPU, memory, temp metrics
-  containers,        // Container status array
-  isRaspberryPi,     // Device type detection
-  loading,           // Loading state
-  error,             // Error message if any
-  healthStatus,      // 'healthy' | 'warning' | 'critical'
-  formatUptime,      // Helper to format seconds → "2d 14h 32m"
-} = useTelemetry({
-  url: 'http://localhost:5000',
-  pollInterval: 2000
-});
-```
-
-## Configuration
-
-### Backend Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CAMERA_STREAM_URL` | `tcp://127.0.0.1:8888` | Video source URL |
-
-### Dashboard Environment Variables
-
-Create `.env.local` in `dashboard/`:
-
-```env
-VITE_BACKEND_URL=http://localhost:5000
-```
+---
 
 ## Project Structure
 
+
 ```
 minimart_2.0/
-├── main.py                    # Flask application entry point
-├── requirements.txt           # Python dependencies
-├── domain/
-│   └── interfaces.py          # Abstract interfaces (SOLID)
-├── services/
-│   ├── detection.py           # YOLO object detection
-│   ├── tracking.py            # Person tracking logic
-│   ├── geometry.py            # Coordinate transformation
-│   └── telemetry.py           # Device metrics collection
-├── infrastructure/
-│   └── camera.py              # Camera hardware abstraction
-└── dashboard/
-    ├── package.json
-    ├── src/
-    │   └── app/
-    │       ├── App.tsx
-    │       ├── hooks/
-    │       │   ├── useTrackingSocket.ts
-    │       │   └── useTelemetry.ts
-    │       └── components/
-    │           ├── VisionFeed.tsx
-    │           ├── BedrockAnalysis.tsx
-    │           ├── DeviceTelemetry.tsx
-    │           └── ContainerHealth.tsx
-    └── .env.example
+├── models/                  # Compiled HEF models for Hailo-8L
+├── infrastructure/          # Hardware abstraction layers
+│   └── camera.py            # Native rpicam-vid interface
+├── services/                # Core Business Logic
+│   ├── detection.py         # YOLO Inference Manager
+│   ├── tracking.py          # ID & Trajectory Tracking
+│   └── analytics.py         # Zone & Dwell Time Logic
+├── dashboard/               # Next.js Frontend Application
+│   ├── src/app/             # Pages & Routing
+│   ├── src/components/      # UI Widgets (LiveStream, Charts)
+│   └── public/              # Static Assets
+├── crowdhuman_hailo_detector.py  # Custom Hailo Inference Engine
+├── main.py                  # Flask API Entry Point
+├── run.sh                   # Startup Script (handles venv & hardware init)
+└── README.md                
 ```
 
-## Next Steps: Bedrock Integration
+---
 
-The `BedrockAnalysis` component is prepared for LLM integration. To connect to AWS Bedrock:
-
-1. Add AWS SDK to backend
-2. Create an analytics service endpoint
-3. Replace `generateMockResponse()` with actual Bedrock calls
-4. Consider streaming responses for better UX
-
-## Development
-
-### Testing Backend Only
-
-```bash
-# Test API endpoints
-curl http://localhost:5000/api/telemetry
-
-# Test WebSocket (using wscat)
-wscat -c ws://localhost:5000/socket.io/?EIO=4&transport=websocket
-```
-
-### Testing Dashboard Only
-
-The dashboard gracefully handles backend disconnection and shows appropriate fallback states.

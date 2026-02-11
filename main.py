@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Minimart Pi 5 Production - API Server
-Role: Provides Video Stream & Real-time Data to React Frontend
+Role: Provides Video Stream & Real-time Data to Next.js Frontend
 """
 
 import cv2
@@ -23,26 +23,22 @@ from services.analytics import AnalyticsService
 
 class MinimartPiApp:
     def __init__(self):
-        # 1. Initialize Hardware
         print("🔌 Initializing Pi 5 Hardware...")
         self.camera = CameraService()
         self.detector = DetectionService(confidence_threshold=0.5) 
         
-        # 2. Initialize Logic
         self.tracker = TrackingService(max_distance=150, max_age=30)
         self.analytics = AnalyticsService()
         
-        # State
         self.running = False
         self.current_frame = None
         self.fps = 0.0
         self.lock = threading.Lock()
         
-        # 3. Initialize API Server
         self.app = Flask(__name__)
         self.app.config['SECRET_KEY'] = 'minimart_pi_prod'
         
-        # ENABLE CORS: Allow React (on any port) to access this API
+        # Enable CORS for the Next.js frontend
         CORS(self.app, resources={r"/*": {"origins": "*"}})
         self.socketio = SocketIO(self.app, cors_allowed_origins="*", async_mode='gevent')
         
@@ -51,11 +47,7 @@ class MinimartPiApp:
     def _setup_routes(self):
         @self.app.route('/')
         def index():
-            return jsonify({
-                'status': 'Online', 
-                'service': 'Minimart Orchestrator',
-                'endpoints': ['/video_feed', '/api/status']
-            })
+            return jsonify({'status': 'Online', 'service': 'Minimart API', 'version': '2.0'})
 
         @self.app.route('/video_feed')
         def video_feed():
@@ -63,11 +55,15 @@ class MinimartPiApp:
         
         @self.app.route('/api/status')
         def api_status():
-            return jsonify({'fps': self.fps, 'active_tracks': len(self.analytics.people_stats)})
+            return jsonify({
+                'fps': self.fps, 
+                'active_tracks': len([t for t in self.tracker.tracks if t.get('active', False)]),
+                'system': 'Raspberry Pi 5'
+            })
 
     def _generate_frames(self):
         while True:
-            time.sleep(0.04) # Cap streaming at ~25 FPS
+            time.sleep(0.04)
             with self.lock:
                 if self.current_frame is not None:
                     try:
@@ -81,7 +77,6 @@ class MinimartPiApp:
         print("🔄 Pi 5 Processing Loop Started...")
         frame_count = 0
         start_time = time.time()
-        last_emit = time.time()
         
         while self.running:
             success, frame = self.camera.get_frame()
@@ -89,36 +84,24 @@ class MinimartPiApp:
                 time.sleep(0.01)
                 continue
             
-            # 1. Inference & Tracking
             detections = self.detector.detect(frame)
             tracks = self.tracker.update(detections)
             self.analytics.update(tracks)
             
-            # 2. Update Current Frame (Raw, no drawing needed as React draws boxes)
-            # We send raw frames to keep the stream clean, or we can draw debug info.
-            # For this dashboard, let's keep it clean since React draws the overlay.
+            # Simple visualization for the stream
+            for track in tracks:
+                if track.get('active'):
+                    x, y, w, h = int(track['x']), int(track['y']), int(track['width']), int(track['height'])
+                    cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+            
             with self.lock:
                 self.current_frame = frame.copy()
             
-            # 3. Stats Calculation
             frame_count += 1
             if time.time() - start_time > 1.0:
                 self.fps = frame_count / (time.time() - start_time)
                 print(f"📊 FPS: {self.fps:.1f} | Active: {len(tracks)}")
                 frame_count, start_time = 0, time.time()
-                
-            # 4. Socket Broadcast (The Fix)
-            if time.time() - last_emit > 0.1: # 10Hz updates
-                active_count = len([t for t in tracks if t.get('active')])
-                
-                # CRITICAL: This structure matches VisionFeed.tsx exactly
-                self.socketio.emit('coordinate_tracking_update', {
-                    'fps': self.fps,               # Fixes the .toFixed crash
-                    'active_count': active_count,  # Fixes the object count
-                    'people': tracks,              # Used for bounding boxes
-                    'analytics_summary': self.analytics.get_llm_context()
-                })
-                last_emit = time.time()
 
     def start(self):
         self.running = True
